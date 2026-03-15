@@ -45,15 +45,14 @@
     "zod",
     "migrations"
   ],
-  "homepage": "TODO GIT REPO",
+  "homepage": "https://github.com/ajdepaul/pet-db",
   "bugs": {
-    "url": "TODO GIT ISSUES"
+    "url": "https://github.com/ajdepaul/pet-db/issues"
   },
-  "license": "TODO LICENSE",
-  "author": "TODO Anthony DePaul <anthony@adepaul.dev> (https://adepaul.dev/)",
-  "funding": "TODO funding",
+  "license": "MIT",
+  "author": "Anthony DePaul <anthony@adepaul.dev>",
   "repository": {
     "type": "GIT",
-    "url": "TODO GIT REPO"
+    "url": "https://github.com/ajdepaul/pet-db.git"
   }
 }
