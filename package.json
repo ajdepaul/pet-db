@@ -1,0 +1,59 @@
+{
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "async-mutex": "^0.5.0"
+  },
+  "peerDependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.5.0",
+    "eslint": "^10.0.3",
+    "globals": "^17.4.0",
+    "tsup": "^8.5.1",
+    "typescript-eslint": "^8.57.0",
+    "vitest": "^4.1.0",
+    "zod": "^4.3.6"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "name": "pet-db",
+  "version": "0.1.0",
+  "description": "A small, Zod JSON-validated, local database library with type-safe migrations for pet projects.",
+  "keywords": [
+    "database",
+    "db",
+    "JSON",
+    "local",
+    "zod",
+    "migrations"
+  ],
+  "homepage": "TODO GIT REPO",
+  "bugs": {
+    "url": "TODO GIT ISSUES"
+  },
+  "license": "TODO LICENSE",
+  "author": "TODO Anthony DePaul <anthony@adepaul.dev> (https://adepaul.dev/)",
+  "funding": "TODO funding",
+  "repository": {
+    "type": "GIT",
+    "url": "TODO GIT REPO"
+  }
+}

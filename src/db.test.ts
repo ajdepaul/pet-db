@@ -1,0 +1,173 @@
+import { createDbClient } from "./db.js";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFile, writeFile } from "fs/promises";
+import { z } from "zod";
+import type { DbVersionConfig } from "./types.js";
+
+vi.mock("fs/promises", () => ({
+  readFile: vi.fn(),
+  writeFile: vi.fn(),
+}));
+
+const v1InputSchema = z.object({ value: z.string().max(10) });
+type V1Input = z.infer<typeof v1InputSchema>;
+const v1OutputSchema = v1InputSchema.transform((d) => ({ ...d, valueWithExtra: `${d.value} +extra` }));
+type V1Output = z.infer<typeof v1OutputSchema>;
+
+const v2InputSchema = z.object({ value: z.string(), num: z.int() });
+type V2Input = z.infer<typeof v2InputSchema>;
+const v2OutputSchema = v2InputSchema.transform((d) => ({ ...d, numString: d.num.toString() }));
+type V2Output = z.infer<typeof v2OutputSchema>;
+
+const v1Config: DbVersionConfig<unknown, V1Input, V1Output> = {
+  version: 1,
+  inputSchema: v1InputSchema,
+  outputSchema: v1OutputSchema,
+  migrate: () => ({ value: "default" }),
+};
+
+const v2Config: DbVersionConfig<V1Input, V2Input, V2Output> = {
+  version: 2,
+  inputSchema: v2InputSchema,
+  outputSchema: v2OutputSchema,
+  migrate: (old) => ({ value: old.value, num: 0 }),
+};
+
+const allConfigs = [v1Config, v2Config];
+
+describe("db", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  describe("createDbClient", () => {
+    it("readme snippet works", async () => {
+      vi.mocked(readFile).mockRejectedValue({ code: "ENOENT" });
+
+      const v1InputSchema = z.object({ value: z.string().max(10) });
+      const v1OutputSchema = v1InputSchema.transform((d) => ({ ...d, valueWithExtra: `${d.value} +extra` }));
+
+      const v2InputSchema = z.object({ value: z.string(), num: z.int() });
+      const v2OutputSchema = v2InputSchema.transform((d) => ({ ...d, numString: d.num.toString() }));
+
+      const petDb = createDbClient()
+        .addVersion({
+          version: 1,
+          inputSchema: v1InputSchema,
+          outputSchema: v1OutputSchema,
+          migrate: () => ({ value: "default" }),
+        })
+        .addVersion({
+          version: 2,
+          inputSchema: v2InputSchema,
+          outputSchema: v2OutputSchema,
+          migrate: (old) => ({ value: old.value, num: 0 }),
+        })
+        .build("db.json");
+
+      await petDb.mutate((draft) => {
+        draft.value = "new value";
+        draft.num = 123;
+      });
+
+      expect(writeFile).toHaveBeenCalledWith(
+        "db.json",
+        JSON.stringify({ version: 2, data: { value: "new value", num: 123 } }),
+      );
+      expect(await petDb.view()).toEqual({ value: "new value", num: 123, numString: "123" });
+    });
+
+    it("view() correctly lazy-loads data, validates output schema, and memoizes the result", async () => {
+      const inputData = { value: "test" };
+      const outputData = { ...inputData, valueWithExtra: "test +extra" };
+
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify({ version: 1, data: inputData }));
+
+      const dbClient = createDbClient().addVersion(v1Config).build("db.json");
+
+      // first call should load data
+      const data1 = await dbClient.view();
+      expect(data1).toEqual(outputData);
+      expect(readFile).toHaveBeenCalledTimes(1);
+
+      // second call should use memoized data
+      const data2 = await dbClient.view();
+      expect(data2).toEqual(outputData);
+      expect(readFile).toHaveBeenCalledTimes(1); // not called again
+    });
+
+    it("build() throws an error if no version configurations are provided", () => {
+      const builder = createDbClient(); // no configs
+      expect(() => builder.build("db.json")).toThrow(/Missing DB version configurations/);
+    });
+
+    it("view() throws error when parsing file fails output schema", async () => {
+      const badOutputConfig: DbVersionConfig<unknown, any, string> = {
+        version: 1,
+        inputSchema: z.any(),
+        outputSchema: z.string(),
+        migrate: () => "default",
+      };
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify({ version: 1, data: 123 }));
+      const client = createDbClient().addVersion(badOutputConfig).build("db.json");
+      await expect(client.view()).rejects.toThrow(/Failed to parse DB file/);
+    });
+
+    it("mutate() modifies data, validates against inputSchema, writes to file system, and clears memo", async () => {
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify({ version: 1, data: { value: "test" } }));
+      const client = createDbClient().addVersion(v1Config).build("db.json");
+
+      await client.view(); // populate memo
+
+      await client.mutate((draft) => {
+        draft.value = "mutated";
+      });
+
+      expect(writeFile).toHaveBeenCalledWith("db.json", JSON.stringify({ version: 1, data: { value: "mutated" } }));
+
+      // view again should load from raw data (memo was cleared, but raw data was updated)
+      const data = await client.view();
+      expect(data).toEqual({ value: "mutated", valueWithExtra: "mutated +extra" });
+      expect(readFile).toHaveBeenCalledTimes(1); // didnt read again because raw data was present
+    });
+
+    it("mutate() throws error when mutation fails inputSchema", async () => {
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify({ version: 1, data: { value: "test" } }));
+      const client = createDbClient().addVersion(v1Config).build("db.json");
+
+      await expect(
+        client.mutate((draft) => {
+          draft.value = "this value is too long";
+        }),
+      ).rejects.toThrow(/DB mutation failed to pass schema validation/);
+
+      expect(writeFile).not.toHaveBeenCalled();
+    });
+
+    it("mutate() throws error on write failure", async () => {
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify({ version: 1, data: { value: "test" } }));
+      vi.mocked(writeFile).mockRejectedValue(new Error("Disk full"));
+
+      const client = createDbClient().addVersion(v1Config).build("db.json");
+
+      await expect(
+        client.mutate((draft) => {
+          draft.value = "changed";
+        }),
+      ).rejects.toThrow(/Error writing to DB File/);
+    });
+
+    it("mutate() throws error on write failure (non-Error object)", async () => {
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify({ version: 1, data: { value: "test" } }));
+      vi.mocked(writeFile).mockRejectedValue("string error");
+
+      const client = createDbClient().addVersion(v1Config).build("db.json");
+
+      await expect(
+        client.mutate((draft) => {
+          draft.value = "changed";
+        }),
+      ).rejects.toThrow(/Error writing to DB File/);
+    });
+  });
+});
