@@ -1,7 +1,7 @@
-import { readFile } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { loadFile, migrate } from "../src/db-util.js";
+import { loadFile, migrate, writeData } from "../src/db-util.js";
 import type { DbVersionConfig } from "../src/types.js";
 
 vi.mock("fs/promises", () => ({
@@ -112,6 +112,33 @@ describe("db-util", () => {
       await expect(migrate(db, [v1Config, badV2Config], "db.json")).rejects.toThrow(
         /Migration to version 2 failed validation/,
       );
+    });
+  });
+
+  describe("writeData", () => {
+    const mockBackupFunction = vi.fn();
+    const mockDbData = { version: 1, data: { value: "test" } };
+
+    beforeEach(() => {
+      mockBackupFunction.mockClear();
+    });
+
+    it("writes data to the DB file using JSON.stringify", async () => {
+      await writeData("test.json", mockDbData, "mutate");
+      expect(vi.mocked(writeFile)).toHaveBeenCalledWith("test.json", JSON.stringify(mockDbData));
+    });
+
+    it("executes a custom backup function if provided in options", async () => {
+      const options = { backupFunction: mockBackupFunction };
+      await writeData("test.json", mockDbData, "mutate", options);
+
+      expect(mockBackupFunction).toHaveBeenCalledWith("test.json", "mutate", options);
+      expect(vi.mocked(writeFile)).toHaveBeenCalledWith("test.json", JSON.stringify(mockDbData));
+    });
+
+    it("throws an error if writeFile fails", async () => {
+      vi.mocked(writeFile).mockRejectedValue(new Error("Disk space full"));
+      await expect(writeData("test.json", mockDbData, "mutate")).rejects.toThrow(/Error writing to DB File/);
     });
   });
 });

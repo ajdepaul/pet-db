@@ -162,6 +162,36 @@ describe("defaultBackup", () => {
     expect(copyFile).not.toHaveBeenCalled();
   });
 
+  it("throws error if stat fails", async () => {
+    vi.mocked(readdir).mockResolvedValue(["my-db_old.json"] as any);
+    vi.mocked(stat).mockRejectedValue(new Error("EACCES"));
+
+    await expect(defaultBackup("test.json", "migrate", {})).rejects.toThrow(/Failed to read file stats/);
+  });
+
+  it("warns if unlink fails during cleanup", async () => {
+    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const existingFiles = Array.from({ length: 11 }, (_, i) => `backup_${i}.json`);
+    vi.mocked(readdir).mockResolvedValue(existingFiles as any);
+
+    vi.mocked(stat).mockImplementation(async (filePath) => {
+      const match = filePath.toString().match(/(\d+)/);
+      const index = match ? parseInt(match[1]!, 10) : 0;
+      return { mtimeMs: Date.now() - 100000 + index * 1000 } as any;
+    });
+
+    vi.mocked(unlink).mockRejectedValue(new Error("EPERM"));
+
+    await defaultBackup("my-db.json", "migrate", {}); // forces backup
+
+    expect(unlink).toHaveBeenCalled();
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/Failed to delete backup file during cleanup/),
+    );
+    consoleWarnSpy.mockRestore();
+  });
+
   it("logs success message on mutate if log option is true", async () => {
     await defaultBackup("my-db.json", "mutate", { log: true });
     expect(consoleLogSpy).toHaveBeenCalledWith("✅ Pet-DB routine backup complete.");

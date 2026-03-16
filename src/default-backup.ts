@@ -33,7 +33,15 @@ export const defaultBackup: BackupFunction = async (
   }
 
   const filesWithStats = (
-    await Promise.all(jsonFiles.map(async (file) => ({ file, stats: await stat(join(backupsPath, file)) })))
+    await Promise.all(
+      jsonFiles.map(async (file) => {
+        try {
+          return { file, stats: await stat(join(backupsPath, file)) };
+        } catch (e) {
+          throw new Error(`Failed to read file stats of file "${file}".`, { cause: e });
+        }
+      }),
+    )
   ).sort((a, b) => a.stats.mtimeMs - b.stats.mtimeMs);
 
   if (
@@ -62,7 +70,11 @@ export const defaultBackup: BackupFunction = async (
     const numToDelete = filesWithStats.length - maxBackups + 1; // +1 to account for the new backup not in filesWithStats
 
     for (let i = 0; i < numToDelete; i++) {
-      await unlink(join(backupsPath, filesWithStats[i]!.file));
+      try {
+        await unlink(join(backupsPath, filesWithStats[i]!.file));
+      } catch {
+        console.warn(`Failed to delete backup file during cleanup (${filesWithStats[i]!.file}). Skipping...`);
+      }
     }
   }
 };

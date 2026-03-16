@@ -160,5 +160,28 @@ describe("db", () => {
         }),
       ).rejects.toThrow(/Error writing to DB File/);
     });
+
+    it("mutate() triggers backup if backupOptions is provided", async () => {
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify({ version: 1, data: { value: "test" } }));
+
+      const mockBackupFunction = vi.fn();
+
+      const client = await createDbClient().addVersion(v1Config).build("db.json", {
+        backupFunction: mockBackupFunction,
+        maxFiles: 3,
+      });
+
+      await client.mutate((draft) => {
+        draft.value = "mutated";
+      });
+
+      expect(writeFile).toHaveBeenCalledWith("db.json", JSON.stringify({ version: 1, data: { value: "mutated" } }));
+
+      expect(mockBackupFunction).toHaveBeenCalledTimes(1);
+      expect(mockBackupFunction).toHaveBeenCalledWith("db.json", "mutate", {
+        backupFunction: mockBackupFunction,
+        maxFiles: 3,
+      });
+    });
   });
 });
