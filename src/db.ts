@@ -1,7 +1,6 @@
-import type { BaseDbFile, DbClientBuilder, DbVersionConfig, RestrictedData } from "./types.js";
-import { loadFile, migrate } from "./db-util.js";
-import { writeFile } from "fs/promises";
 import { Mutex } from "async-mutex";
+import { loadFile, migrate, writeData } from "./db-util.js";
+import type { BaseDbFile, DbClientBuilder, DbVersionConfig, RestrictedData } from "./types.js";
 
 function createDbClientBuilder<DbInput extends RestrictedData, DbOutput>(
   configs: DbVersionConfig<any, any, any>[],
@@ -9,34 +8,36 @@ function createDbClientBuilder<DbInput extends RestrictedData, DbOutput>(
   return {
     addVersion: (config) => createDbClientBuilder([...configs, config]),
 
-    build: (dbPath) => {
-      if (configs.length === 0) {
-        throw new Error("Missing DB version configurations.");
-      }
+    build: async (dbPath, backupOptions) => {
+      if (configs.length === 0) throw new Error("Missing DB version configurations.");
 
       const finalConfig = configs.at(-1)!;
 
       let rawData: BaseDbFile | null = null;
       let dbOutputMemo: any = null;
 
-      const loadRawData = async () => migrate(await loadFile(dbPath, configs), configs);
-
       const mutex = new Mutex();
+
+      const loadRawData = async () => {
+        return await migrate(await loadFile(dbPath, configs), configs, dbPath, backupOptions);
+      };
 
       return {
         view: async () => {
-          if (!dbOutputMemo) {
-            if (!rawData) rawData = await loadRawData();
+          return await mutex.runExclusive(async () => {
+            if (!dbOutputMemo) {
+              if (!rawData) rawData = await loadRawData();
 
-            const parsed = finalConfig.outputSchema.safeParse(rawData.data);
+              const parsed = finalConfig.outputSchema.safeParse(rawData.data);
 
-            if (parsed.success) {
-              dbOutputMemo = parsed.data;
-            } else {
-              throw new Error("Failed to parse DB file.", { cause: parsed.error });
+              if (parsed.success) {
+                dbOutputMemo = parsed.data;
+              } else {
+                throw new Error("Failed to parse DB file.", { cause: parsed.error });
+              }
             }
-          }
-          return dbOutputMemo;
+            return dbOutputMemo;
+          });
         },
 
         mutate: async (mutator) => {
@@ -52,17 +53,7 @@ function createDbClientBuilder<DbInput extends RestrictedData, DbOutput>(
             }
 
             const newRawData = { version: finalConfig.version, data: parsed.data };
-
-            try {
-              await writeFile(dbPath, JSON.stringify(newRawData));
-            } catch (e) {
-              if (e instanceof Error) {
-                throw new Error("Error writing to DB File.", { cause: e });
-              } else {
-                throw new Error("Error writing to DB File.");
-              }
-            }
-
+            await writeData(dbPath, newRawData, "mutate", backupOptions);
             rawData = newRawData;
             dbOutputMemo = null; // view memo is no longer valid
           });

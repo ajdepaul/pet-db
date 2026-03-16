@@ -1,4 +1,4 @@
-# pet-db
+# Pet-DB
 
 A small, [Zod](https://zod.dev/) JSON-validated, local database library with type-safe migrations for pet projects.
 
@@ -11,7 +11,7 @@ Features:
 
 - `build`: Builds with [tsup](https://tsup.egoist.dev/).
 - `typecheck`: Checks TypeScript types.
-- `test`: Runs [Vitest](https://vitest.dev/) tests.
+- `test` or `test --ui`: Runs [Vitest](https://vitest.dev/) tests.
 
 ## Getting Started
 

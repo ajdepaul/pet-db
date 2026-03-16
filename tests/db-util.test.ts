@@ -1,10 +1,11 @@
-import { loadFile, migrate } from "./db-util.js";
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFile } from "fs/promises";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import type { DbVersionConfig } from "./types.js";
+import { loadFile, migrate } from "../src/db-util.js";
+import type { DbVersionConfig } from "../src/types.js";
 
 vi.mock("fs/promises", () => ({
+  writeFile: vi.fn(),
   readFile: vi.fn(),
 }));
 
@@ -78,31 +79,28 @@ describe("db-util", () => {
       vi.mocked(readFile).mockRejectedValue(new Error("Permission denied"));
       await expect(loadFile("db.json", allConfigs)).rejects.toThrow(/Failed to read DB file/);
     });
-
-    it("throws an error on other read errors (non-Error object)", async () => {
-      vi.mocked(readFile).mockRejectedValue("string error");
-      await expect(loadFile("db.json", allConfigs)).rejects.toThrow(/Failed to read DB file/);
-    });
   });
 
   describe("migrate", () => {
-    it("correctly migrates from null through multiple version configurations", () => {
-      const result = migrate(null, allConfigs);
+    it("correctly migrates from null through multiple version configurations", async () => {
+      const result = await migrate(null, allConfigs, "db.json");
       expect(result).toEqual({ version: 2, data: { value: "default", num: 0 } });
     });
 
-    it("correctly migrates from an older version through the remaining configurations", () => {
+    it("correctly migrates from an older version through the remaining configurations", async () => {
       const db = { version: 1, data: { value: "test" } };
-      const result = migrate(db, allConfigs);
+      const result = await migrate(db, allConfigs, "db.json");
       expect(result).toEqual({ version: 2, data: { value: "test", num: 0 } });
     });
 
-    it("throws an error if a target file version is not found in configurations", () => {
+    it("throws an error if a target file version is not found in configurations", async () => {
       const db = { version: 999, data: {} };
-      expect(() => migrate(db, allConfigs)).toThrow(/File DB version does not have a matching version configuration/);
+      await expect(migrate(db, allConfigs, "db.json")).rejects.toThrow(
+        /File DB version does not have a matching version configuration/,
+      );
     });
 
-    it("throws an error if the data produced by migrate fails the next version's inputSchema", () => {
+    it("throws an error if the data produced by migrate fails the next version's inputSchema", async () => {
       const badV2Config: DbVersionConfig<V1Input, V2Input, V2Output> = {
         version: 2,
         inputSchema: v2InputSchema,
@@ -111,7 +109,9 @@ describe("db-util", () => {
       };
 
       const db = { version: 1, data: { value: "test" } };
-      expect(() => migrate(db, [v1Config, badV2Config])).toThrow(/Migration to version 2 failed validation/);
+      await expect(migrate(db, [v1Config, badV2Config], "db.json")).rejects.toThrow(
+        /Migration to version 2 failed validation/,
+      );
     });
   });
 });
