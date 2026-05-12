@@ -25,7 +25,7 @@ Features:
    const v1InputSchema = z.object({ value: z.string().max(10) });
    const v1OutputSchema = v1InputSchema.transform((d) => ({ ...d, valueWithExtra: `${d.value} +extra` }));
 
-   const v2InputSchema = z.object({ value: z.string(), num: z.int() });
+   const v2InputSchema = z.object({ value: z.string(), num: z.number().int() });
    const v2OutputSchema = v2InputSchema.transform((d) => ({ ...d, numString: d.num.toString() }));
 
    const petDb = createPetDb()

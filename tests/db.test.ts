@@ -33,7 +33,7 @@ describe("db", () => {
       const v1InputSchema = z.object({ value: z.string().max(10) });
       const v1OutputSchema = v1InputSchema.transform((d) => ({ ...d, valueWithExtra: `${d.value} +extra` }));
 
-      const v2InputSchema = z.object({ value: z.string(), num: z.int() });
+      const v2InputSchema = z.object({ value: z.string(), num: z.number().int() });
       const v2OutputSchema = v2InputSchema.transform((d) => ({ ...d, numString: d.num.toString() }));
 
       const petDb = await createDbClient()
@@ -66,7 +66,7 @@ describe("db", () => {
     it("correctly migrates multiple versions from empty data", async () => {
       vi.mocked(readFile).mockRejectedValue({ code: "ENOENT" });
 
-      const v2InputSchema = z.object({ value: z.string(), num: z.int() });
+      const v2InputSchema = z.object({ value: z.string(), num: z.number().int() });
       const v2OutputSchema = v2InputSchema.transform((d) => ({ ...d, numString: d.num.toString() }));
 
       const dbClient = await createDbClient()

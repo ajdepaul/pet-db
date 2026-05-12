@@ -10,7 +10,7 @@ export type DbClient<DbInput extends RestrictedData, DbOutput> = {
 export type DbVersionConfig<PrevDbInput, DbInput extends RestrictedData, DbOutput> = {
   version: number;
   inputSchema: z.ZodType<DbInput>;
-  outputSchema: z.ZodType<DbOutput>;
+  outputSchema: z.ZodType<DbOutput, z.ZodTypeDef, any>;
   migrate: (oldData: PrevDbInput) => NoInfer<DbInput>;
 };
 
@@ -37,7 +37,7 @@ export type DbClientBuilder<DbInput extends RestrictedData, DbOutput> = {
 };
 
 export const baseDbFileSchema = z.object({
-  version: z.int(),
+  version: z.number().int(),
   data: z.any(),
 });
 

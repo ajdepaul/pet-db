@@ -14,7 +14,7 @@ type V1Input = z.infer<typeof v1InputSchema>;
 const v1OutputSchema = v1InputSchema.transform((d) => ({ ...d, valueWithExtra: `${d.value} +extra` }));
 type V1Output = z.infer<typeof v1OutputSchema>;
 
-const v2InputSchema = z.object({ value: z.string(), num: z.int() });
+const v2InputSchema = z.object({ value: z.string(), num: z.number().int() });
 type V2Input = z.infer<typeof v2InputSchema>;
 const v2OutputSchema = v2InputSchema.transform((d) => ({ ...d, numString: d.num.toString() }));
 type V2Output = z.infer<typeof v2OutputSchema>;
