@@ -11,7 +11,8 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "dist",
-    "sourceMap": true
+    "sourceMap": true,
+    "types": ["node"]
   },
   "include": ["src/**/*", "tests/db-util.test.ts", "tests/db.test.ts", "tests/default-backup.test.ts"]
 }
