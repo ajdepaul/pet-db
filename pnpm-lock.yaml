@@ -22,7 +22,7 @@ importers:
         specifier: ^4.1.0
         version: 4.1.0(vitest@4.1.0)
       '@vitest/ui':
-        specifier: 4.1.0
+        specifier: ^4.1.0
         version: 4.1.0(vitest@4.1.0)
       eslint:
         specifier: ^10.0.3
